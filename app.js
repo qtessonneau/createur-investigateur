@@ -697,7 +697,7 @@
 
   function stepSheet() {
     const stats = applied().stats;
-    return '<h2>Fiche</h2><p class="lead">La fiche suit la présentation des années 1920, sur deux pages. Imprimez-la et choisissez « Enregistrer au format PDF », ou téléchargez-la pour la rouvrir plus tard.</p><div class="actions"><button type="button" class="btn" data-action="print">Imprimer / PDF</button><button type="button" class="btn secondary" data-action="download-html">Télécharger la fiche HTML</button><button type="button" class="btn ghost" data-action="download-json">Sauvegarde JSON</button><button type="button" class="btn ghost" data-action="save-named">Enregistrer dans ce navigateur</button></div><p>' + esc(state.saveMsg) + '</p>' + savesHtml() + '<label class="field"><span>Ouvrir une sauvegarde JSON</span><input type="file" accept="application/json" data-action="import"></label>' + issueList(issues(stats)) + '<p><button type="button" class="btn ghost" data-action="reset">Nouvelle fiche</button></p>';
+    return '<h2>Fiche</h2><p class="lead">La fiche suit la présentation des années 1920, sur deux pages. Téléchargez-la en PDF : dans la fenêtre qui s\'ouvre, choisissez « Enregistrer au format PDF ».</p><div class="actions"><button type="button" class="btn" data-action="print">Télécharger en PDF</button></div>' + issueList(issues(stats)) + '<p><button type="button" class="btn ghost" data-action="reset">Nouvelle fiche</button></p>';
   }
 
   function savesHtml() {
