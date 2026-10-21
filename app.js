@@ -256,13 +256,19 @@
     return keys;
   }
 
+  function isNativeTongueKey(key) {
+    return String(key).split("::")[0] === "Langue maternelle";
+  }
+
   function visibleKeys(stats) {
     const set = [];
-    function add(k) { if (k && set.indexOf(k) < 0) set.push(k); }
+    function add(k) {
+      if (!k || isNativeTongueKey(k)) return;
+      if (set.indexOf(k) < 0) set.push(k);
+    }
     add("Crédit");
     add("Esquive");
     add("Combat rapproché::Corps à corps");
-    add(keyOf("Langue maternelle", state.language || "Français"));
     DATA.skills.forEach(function (s) {
       if (s.tags.indexOf("spec") >= 0 || s.name === "Crédit" || s.name === "Mythe de Cthulhu") return;
       const optional = s.tags.indexOf("rare") >= 0 || s.name === "Conduite d'attelage";
@@ -687,11 +693,10 @@
   function visibleKeysInterestList(stats) {
     const set = [];
     function add(k) {
-      if (!k || k === "Crédit" || isInterestDropdownSpecKey(k)) return;
+      if (!k || k === "Crédit" || isNativeTongueKey(k) || isInterestDropdownSpecKey(k)) return;
       if (set.indexOf(k) < 0) set.push(k);
     }
     add("Esquive");
-    add(keyOf("Langue maternelle", state.language || "Français"));
     DATA.skills.forEach(function (s) {
       if (s.tags.indexOf("spec") >= 0 || s.name === "Crédit" || s.name === "Mythe de Cthulhu") return;
       add(s.name);
