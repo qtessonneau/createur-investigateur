@@ -91,7 +91,74 @@
       weapons: [0, 1, 2, 3].map(function () { return { name: "", skill: "", damage: "", range: "", shots: "", ammo: "", malfunction: "" }; }),
       occQuery: "", saveMsg: "",
       interestSpec: {},
+      weaponsTouched: false,
     };
+  }
+
+  function blankWeaponRow() {
+    return { name: "", skill: "", damage: "", range: "", shots: "", ammo: "", malfunction: "" };
+  }
+
+  function weaponTemplateForKey(key) {
+    const bits = String(key).split("::");
+    if (bits.length < 2) return null;
+    const entry = specCatalogEntry(bits[0], bits[1]);
+    return entry && entry.weapon ? entry.weapon : null;
+  }
+
+  function combatSkillKeysForWeapons(stats) {
+    const keys = [];
+    const seen = {};
+    function consider(key) {
+      if (!key || seen[key]) return;
+      const parent = String(key).split("::")[0];
+      if (parent !== "Combat rapproché" && parent !== "Combat à distance") return;
+      const row = pt(key);
+      const invested = (Number(row.occ) || 0) + (Number(row.per) || 0) + (Number(row.bag) || 0);
+      const listed = occupationKeys().indexOf(key) >= 0 || bagKeys().indexOf(key) >= 0;
+      if (invested > 0 || listed) {
+        seen[key] = true;
+        keys.push(key);
+      }
+    }
+    Object.keys(state.points || {}).forEach(consider);
+    occupationKeys().forEach(consider);
+    bagKeys().forEach(consider);
+    ["Combat rapproché", "Combat à distance"].forEach(function (parent) {
+      const spec = resolveInterestSpec(parent);
+      if (spec) consider(keyOf(parent, spec));
+    });
+    keys.sort(function (a, b) { return totalOf(b, stats) - totalOf(a, stats); });
+    return keys;
+  }
+
+  function weaponRowFromSkillKey(key, stats) {
+    const tpl = weaponTemplateForKey(key);
+    const total = totalOf(key, stats);
+    const spec = String(key).split("::")[1] || String(key);
+    if (!tpl) return Object.assign(blankWeaponRow(), { name: spec, skill: String(total) });
+    return {
+      name: tpl.name,
+      skill: String(total),
+      damage: tpl.damage,
+      range: tpl.range,
+      shots: tpl.shots,
+      ammo: tpl.ammo != null ? tpl.ammo : tpl.shots,
+      malfunction: tpl.malfunction != null ? String(tpl.malfunction) : "—",
+    };
+  }
+
+  function syncWeaponsFromSkills(force) {
+    const stats = applied().stats;
+    const empty = (state.weapons || []).every(function (w) {
+      return !w.name && !w.skill && !w.damage && !w.range && !w.shots && !w.ammo && !w.malfunction;
+    });
+    if (state.weaponsTouched && !force && !empty) return;
+    const keys = combatSkillKeysForWeapons(stats);
+    const rows = keys.slice(0, 4).map(function (k) { return weaponRowFromSkillKey(k, stats); });
+    while (rows.length < 4) rows.push(blankWeaponRow());
+    state.weapons = rows;
+    if (force) state.weaponsTouched = false;
   }
 
   function esc(s) {
@@ -966,6 +1033,7 @@
   }
 
   function stepProfile() {
+    syncWeaponsFromSkills(false);
     const p = state.profile;
     const areas = [["Idéologie et croyances", "ideology"], ["Personnes importantes", "people"], ["Lieux significatifs", "places"], ["Biens précieux", "treasures"], ["Traits", "traits"], ["Attache vitale", "bond"], ["Phobies et manies", "phobias"], ["Séquelles et cicatrices", "scars"], ["Rencontres étranges", "encounters"]];
     let html = "<h2>Profil</h2><div class=\"grid-2\">" + areas.map(function (a) {
@@ -973,9 +1041,11 @@
     }).join("") + "</div>";
     html += '<label class="field"><span>Équipement et possessions</span><textarea data-bind="profile.equipment">' + esc(p.equipment) + '</textarea></label><label class="field"><span>Notes</span><textarea data-bind="profile.notes">' + esc(p.notes) + "</textarea></label>";
     html += "<h3>Armes</h3>";
+    html += '<p class="hint">Remplies automatiquement à partir de vos compétences de <strong>Combat rapproché</strong> et <strong>Combat à distance</strong> (jusqu\'à 4 armes, modèle type années 1920). Modifiez librement ; utilisez le bouton pour resynchroniser après un changement de compétences.</p>';
+    html += '<div class="actions"><button type="button" class="btn ghost" data-action="sync-weapons">Actualiser depuis les compétences</button></div>';
     state.weapons.forEach(function (w, i) {
-      html += '<div class="grid-3">' + ["name", "skill", "damage", "range", "shots", "ammo"].map(function (k) {
-        const labels = { name: "Arme", skill: "Compétence %", damage: "Dégâts", range: "Portée", shots: "Coups", ammo: "Munitions" };
+      html += '<div class="grid-3">' + ["name", "skill", "damage", "range", "shots", "ammo", "malfunction"].map(function (k) {
+        const labels = { name: "Arme", skill: "Compétence %", damage: "Dégâts", range: "Portée", shots: "Coups", ammo: "Munitions", malfunction: "Panne (jet)" };
         return field(labels[k], "weapons." + i + "." + k, w[k]);
       }).join("") + "</div>";
     });
@@ -1405,6 +1475,7 @@
         localStorage.removeItem("inv-draft");
       }
     }
+    if (action === "sync-weapons") syncWeaponsFromSkills(true);
     render();
   }
 
@@ -1511,6 +1582,7 @@
       return;
     }
     if (el.dataset.bind.indexOf("weapons.") === 0 || el.dataset.bind.indexOf("profile.") === 0) {
+      if (el.dataset.bind.indexOf("weapons.") === 0) state.weaponsTouched = true;
       setPath(el.dataset.bind, value);
       return;
     }
@@ -1620,6 +1692,7 @@
     next.assignRolls = raw.assignRolls || [];
     next.assignMap = raw.assignMap || {};
     next.interestSpec = raw.interestSpec || {};
+    next.weaponsTouched = !!raw.weaponsTouched;
     if (next.wizard !== WIZARD_LAYOUT && typeof next.step === "number") {
       if (next.wizard === WIZARD_LAYOUT_PREV) {
         if (next.step >= 9) next.step -= 4;

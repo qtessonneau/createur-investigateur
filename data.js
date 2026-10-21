@@ -274,74 +274,89 @@ globalThis.INV_DATA = {
   "fighting": [
     {
       "name": "Corps à corps",
-      "base": 25
+      "base": 25,
+      "weapon": { "name": "À mains nues", "damage": "1D3", "range": "—", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Hache",
-      "base": 15
+      "base": 15,
+      "weapon": { "name": "Hachette", "damage": "1D6+2", "range": "Contact", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Épée",
-      "base": 20
+      "base": 20,
+      "weapon": { "name": "Épée", "damage": "1D8", "range": "Contact", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Lance",
-      "base": 20
+      "base": 20,
+      "weapon": { "name": "Lance", "damage": "1D8", "range": "2 m", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Fléau",
       "base": 10,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Fléau d'armes", "damage": "1D8+1", "range": "2 m", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Garrot",
       "base": 15,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Garrot", "damage": "1D6+2", "range": "Contact", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Fouet",
       "base": 5,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Fouet", "damage": "1D4", "range": "2 m", "shots": "1", "ammo": "—", "malfunction": "—" }
     },
     {
       "name": "Tronçonneuse",
       "base": 10,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Tronçonneuse", "damage": "2D8", "range": "Contact", "shots": "1", "ammo": "—", "malfunction": "—" }
     }
   ],
   "firearms": [
     {
       "name": "Armes de poing",
-      "base": 20
+      "base": 20,
+      "weapon": { "name": "Revolver cal. .32", "damage": "1D10", "range": "15 m", "shots": "6", "ammo": "6", "malfunction": "100" }
     },
     {
       "name": "Fusils / fusils de chasse",
-      "base": 25
+      "base": 25,
+      "weapon": { "name": "Fusil de chasse", "damage": "4D6/2D6/1D6", "range": "35 m", "shots": "2", "ammo": "2", "malfunction": "100" }
     },
     {
       "name": "Arcs",
       "base": 15,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Arc court", "damage": "1D6+2", "range": "30 m", "shots": "1", "ammo": "1", "malfunction": "96" }
     },
     {
       "name": "Mitraillettes",
       "base": 15,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Thompson M1921", "damage": "1D10+2", "range": "20 m", "shots": "50", "ammo": "50", "malfunction": "96" }
     },
     {
       "name": "Mitrailleuses",
       "base": 10,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Mitrailleuse Lewis", "damage": "1D10+2", "range": "25 m", "shots": "47", "ammo": "47", "malfunction": "94" }
     },
     {
       "name": "Armes lourdes",
       "base": 10,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Mortier léger", "damage": "3D6", "range": "100 m", "shots": "1", "ammo": "1", "malfunction": "100" }
     },
     {
       "name": "Lance-flammes",
       "base": 10,
-      "rare": true
+      "rare": true,
+      "weapon": { "name": "Lance-flammes", "damage": "2D6", "range": "3 m", "shots": "—", "ammo": "—", "malfunction": "93" }
     }
   ],
   "sciences": [
