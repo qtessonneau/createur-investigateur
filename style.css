@@ -40,7 +40,8 @@ h1, h2, h3, h4 { font-family: Palatino, "Palatino Linotype", Georgia, serif; fon
   background: transparent;
   color: #f0e4d4;
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 6px 10px;
+  font-size: 0.82rem;
 }
 .steps button.active { background: var(--paper); color: var(--ink); border-color: var(--paper); }
 .card {
@@ -166,9 +167,16 @@ textarea { min-height: 78px; resize: vertical; }
   padding: 8px 6px;
   border-bottom: 1px solid var(--line);
 }
-.skills-table.has-bag .skill {
-  grid-template-columns: minmax(150px, 1.2fr) 44px minmax(108px, 0.95fr) minmax(108px, 0.95fr) minmax(108px, 0.95fr) 48px;
+.skills-table.mode-occ .skill {
+  grid-template-columns: minmax(160px, 1.35fr) 48px minmax(140px, 1fr) 52px;
 }
+.skills-table.mode-per .skill {
+  grid-template-columns: minmax(150px, 1.2fr) 44px 48px minmax(130px, 1fr) 52px;
+}
+.skills-table.mode-bag .skill {
+  grid-template-columns: minmax(160px, 1.35fr) 48px minmax(140px, 1fr) 52px;
+}
+.bag-config { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
 .skill.head {
   font-size: 0.78rem;
   text-transform: uppercase;

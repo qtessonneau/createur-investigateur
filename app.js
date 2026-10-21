@@ -24,7 +24,9 @@
       o.slots = o.slots.map(simplify).filter(Boolean);
     });
   })();
-  const STEPS = ["Identité", "Caractéristiques", "Occupation", "Compétences", "Profil", "Fiche"];
+  const STEPS = ["Identité", "Caractéristiques", "Métier", "Occupation", "Intérêt", "Bagage", "Profil", "Fiche"];
+  const LAST_STEP = STEPS.length - 1;
+  const WIZARD_LAYOUT = "skills-3";
   const SPEC = ["Arts et métiers", "Combat à distance", "Combat rapproché", "Langues", "Langue maternelle", "Pilotage", "Savoir", "Sciences", "Survie"];
   const BAGAGES = {
     none: { name: "Aucun", points: 0 },
@@ -399,15 +401,17 @@
     const steps = STEPS.map(function (name, i) {
       return '<button type="button" class="no-print ' + (state.step === i ? "active" : "") + '" data-action="goto" data-step="' + i + '">' + (i + 1) + ". " + name + "</button>";
     }).join("");
-    return '<header class="top no-print"><div class="brand"><h1>Créateur d\'investigateur</h1><p>Vos joueurs créent leur personnage pas à pas, puis téléchargent la fiche. Outil de table, non officiel : le livre reste la référence.</p></div></header><nav class="steps">' + steps + '</nav><main class="card no-print">' + body() + '</main>' + (state.step === 5 ? '<div class="sheet-wrap">' + sheetHtml() + "</div>" : "") + '<div class="nav no-print"><button type="button" class="btn secondary" data-action="prev"' + (state.step === 0 ? " disabled" : "") + '>Retour</button><button type="button" class="btn" data-action="next"' + (state.step === 5 ? " disabled" : "") + ">Continuer</button></div>";
+    return '<header class="top no-print"><div class="brand"><h1>Créateur d\'investigateur</h1><p>Vos joueurs créent leur personnage pas à pas, puis téléchargent la fiche. Outil de table, non officiel : le livre reste la référence.</p></div></header><nav class="steps">' + steps + '</nav><main class="card no-print">' + body() + '</main>' + (state.step === LAST_STEP ? '<div class="sheet-wrap">' + sheetHtml() + "</div>" : "") + '<div class="nav no-print"><button type="button" class="btn secondary" data-action="prev"' + (state.step === 0 ? " disabled" : "") + '>Retour</button><button type="button" class="btn" data-action="next"' + (state.step === LAST_STEP ? " disabled" : "") + ">Continuer</button></div>";
   }
 
   function body() {
     if (state.step === 0) return stepIdentity();
     if (state.step === 1) return stepStats();
     if (state.step === 2) return stepOcc();
-    if (state.step === 3) return stepSkills();
-    if (state.step === 4) return stepProfile();
+    if (state.step === 3) return stepSkillsOcc();
+    if (state.step === 4) return stepSkillsInterest();
+    if (state.step === 5) return stepSkillsBag();
+    if (state.step === 6) return stepProfile();
     return stepSheet();
   }
 
@@ -501,7 +505,7 @@
     const q = state.occQuery.toLowerCase();
     const list = DATA.occupations.filter(function (o) { return occLabel(o).toLowerCase().indexOf(q) >= 0; });
     const occ = occById(state.occupationId);
-    let html = '<h2>Occupation</h2><p class="lead">Survolez un nom pour un aperçu, puis choisissez-le pour lire le détail.</p><label class="field"><span>Rechercher</span><input data-bind="occQuery" value="' + esc(state.occQuery) + '"></label><div class="list">';
+    let html = '<h2>Métier</h2><p class="lead">Choisissez l\'occupation de l\'investigateur : elle détermine les compétences de métier et le calcul des points d\'occupation à l\'étape suivante. Survolez un nom pour un aperçu.</p><label class="field"><span>Rechercher</span><input data-bind="occQuery" value="' + esc(state.occQuery) + '"></label><div class="list">';
     list.forEach(function (o) {
       const blurb = HELP.occupations[o.id] || "";
       html += '<button type="button" data-action="occ" data-id="' + esc(o.id) + '"' + (blurb ? ' data-tip="' + esc(blurb) + '"' : "") + ' class="' + (o.id === state.occupationId ? "active" : "") + '">' + esc(occLabel(o)) + "</button>";
@@ -626,66 +630,140 @@
     return head.concat(tail);
   }
 
-  function skillSectionTitle(title, detail) {
-    return '<div class="skill-section"><strong>' + title + "</strong>" + (detail ? '<span class="skill-section-detail">' + detail + "</span>" : "") + "</div>";
+  function keysForOccStep(stats) {
+    const visible = visibleKeys(stats);
+    const occKeys = occupationKeys();
+    const keys = [];
+    if (visible.indexOf("Crédit") >= 0) keys.push("Crédit");
+    occKeys.forEach(function (k) {
+      if (k && k !== "Crédit" && keys.indexOf(k) < 0 && visible.indexOf(k) >= 0) keys.push(k);
+    });
+    return keys;
   }
 
-  function stepSkills() {
+  function occPointsDisplay(key) {
+    const v = pt(key).occ || 0;
+    if (v > 0) return '<div class="nums point-readonly"><strong>' + v + "</strong></div>";
+    return '<div class="point-na" aria-hidden="true">—</div>';
+  }
+
+  function issuesForStep(stats, step) {
+    const all = issues(stats);
+    if (step === 3) {
+      return all.filter(function (m) {
+        return /occupation|Crédit|Choisissez une occupation|compétences d'occupation/i.test(m);
+      });
+    }
+    if (step === 4) {
+      return all.filter(function (m) {
+        return /intérêt|plafond|dépasse/i.test(m);
+      });
+    }
+    if (step === 5) {
+      return all.filter(function (m) {
+        return /bagage|Mythe/i.test(m);
+      });
+    }
+    return all;
+  }
+
+  function stepSkillsOcc() {
+    const stats = applied().stats;
+    const bud = budgets(stats);
+    const occ = occById(state.occupationId);
+    const occKeys = occupationKeys();
+    const keys = keysForOccStep(stats);
+    let html = "<h2>Occupation</h2>";
+    html += '<p class="lead">Les <strong>points d\'occupation</strong> reflètent la formation du métier (calculés avec l\'Éducation et parfois une autre caractéristique). Placez-les <em>uniquement</em> sur les compétences de votre occupation et sur le <strong>Crédit</strong>, dans la fourchette indiquée par le métier.</p>';
+    html += '<div class="budget">' + budgetPill("Points d'occupation", spent("occ"), bud.occ) + "</div>";
+    html += '<p class="hint">Plafond à la création : ' + CAP + " % par compétence. Survolez un nom pour l'aide.</p>";
+    if (!keys.length) {
+      html += '<p class="warn">Choisissez d\'abord un métier et complétez ses compétences à l\'étape précédente.</p>';
+    } else {
+      html += '<div class="skills-table mode-occ">';
+      html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Points</span><span>Total</span></div>';
+      keys.forEach(function (key) {
+        const row = pt(key);
+        const base = baseOf(key, stats);
+        const total = totalOf(key, stats);
+        const occOk = occKeys.indexOf(key) >= 0 && key !== "Mythe de Cthulhu";
+        const rowCls = "skill skill-occ-row" + (total > CAP ? " skill-over-cap" : "");
+        html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
+        html += stepper(key, "occ", row.occ || 0, occOk || key === "Crédit");
+        html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
+      });
+      html += "</div>";
+    }
+    if (occ) html += '<p class="hint">Crédit attendu pour ce métier : entre <strong>' + occ.credit[0] + "</strong> et <strong>" + occ.credit[1] + "</strong> % (payé en points d'occupation).</p>";
+    html += issueList(issuesForStep(stats, 3));
+    return html;
+  }
+
+  function stepSkillsInterest() {
     const stats = applied().stats;
     const bud = budgets(stats);
     const occKeys = occupationKeys();
-    const bKeys = bagKeys();
-    const occ = occById(state.occupationId);
-    const hasBag = bud.bag > 0;
     const keys = sortSkillKeysForStep(visibleKeys(stats), occKeys);
-    let html = "<h2>Compétences</h2>";
-    html += '<p class="lead">Répartissez d\'abord les <strong>points d\'occupation</strong> sur les compétences de votre métier (et le Crédit), puis les <strong>points d\'intérêt</strong> (INT × 2) où vous voulez. Plafond à la création : ' + CAP + " % par compétence.</p>";
-    html += '<div class="budget">' + budgetPill("Points d'occupation", spent("occ"), bud.occ) + budgetPill("Points d'intérêt (INT × 2)", spent("per"), bud.per);
-    if (hasBag) html += budgetPill("Points de bagage", spent("bag"), bud.bag);
-    html += "</div>";
-    html += '<p class="hint">Survolez un nom de compétence pour en savoir plus. Les tirets (—) indiquent qu\'on ne peut pas placer ce type de points sur la ligne.</p>';
-    html += '<div class="skills-table' + (hasBag ? " has-bag" : "") + '">';
-    html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Occupation</span><span>Intérêt</span>';
-    if (hasBag) html += "<span>Bagage</span>";
-    html += "<span>Total</span></div>";
-    let section = "";
+    let html = "<h2>Intérêt</h2>";
+    html += '<p class="lead">Les <strong>points d\'intérêt personnels</strong> (INT × 2) permettent de distinguer votre investigateur : passe-temps, savoirs annexes, ou renfort d\'une compétence de métier. Répartissez-les librement sur les compétences ci-dessous.</p>';
+    html += '<div class="budget">' + budgetPill("Points d'intérêt (INT × 2)", spent("per"), bud.per) + "</div>";
+    html += '<p class="hint">Plafond à la création : ' + CAP + " %. La colonne « Occ. » rappelle ce que vous avez déjà placé à l'étape précédente.</p>";
+    html += '<div class="skills-table mode-per">';
+    html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Occ.</span><span>Intérêt</span><span>Total</span></div>';
     keys.forEach(function (key) {
-      const inOccBlock = key === "Crédit" || occKeys.indexOf(key) >= 0;
-      const nextSection = inOccBlock ? "occ" : "per";
-      if (nextSection !== section) {
-        section = nextSection;
-        if (section === "occ") {
-          const creditHint = occ ? "Crédit entre " + occ.credit[0] + " et " + occ.credit[1] + " %." : "";
-          html += skillSectionTitle("1 — Compétences d'occupation", creditHint || "Uniquement les lignes ci-dessous acceptent des points d'occupation.");
-        } else {
-          html += skillSectionTitle("2 — Points d'intérêt personnels", "Répartissez le reste de vos points d'intérêt sur les compétences de votre choix (y compris celles déjà augmentées à l'étape 1).");
-        }
-      }
       const row = pt(key);
       const base = baseOf(key, stats);
       const total = totalOf(key, stats);
-      const occOk = occKeys.indexOf(key) >= 0 && key !== "Mythe de Cthulhu";
       const perOk = key !== "Mythe de Cthulhu";
-      const bagOk = hasBag && bKeys.indexOf(key) >= 0 && state.bagage !== "myth" && key !== "Mythe de Cthulhu";
-      const rowCls = "skill" + (inOccBlock ? " skill-occ-row" : "") + (total > CAP ? " skill-over-cap" : "");
+      const rowCls = "skill" + (total > CAP ? " skill-over-cap" : "");
       html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
-      html += stepper(key, "occ", row.occ || 0, occOk) + stepper(key, "per", row.per || 0, perOk);
-      if (hasBag) html += stepper(key, "bag", row.bag || 0, bagOk);
+      html += occPointsDisplay(key) + stepper(key, "per", row.per || 0, perOk);
       html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
     });
     html += "</div>";
     html += '<div class="actions"><select data-action="add-skill"><option value="">Ajouter une compétence d\'intérêt…</option>' + DATA.skills.filter(function (s) { return s.name !== "Crédit"; }).map(function (s) {
       return '<option value="' + esc(s.name) + '">' + esc(s.name) + (s.tags ? " (" + s.tags + ")" : "") + "</option>";
     }).join("") + '</select></div>';
-    html += bagageBlock();
     const money = financesNow(stats);
     html += "<h3>Niveau de vie</h3><p>Crédit " + money.cr + " — " + money.life + ". Espèces " + R.money(money.fin.cash) + ", capital " + R.money(money.fin.assets) + ", dépenses courantes " + R.money(money.fin.spend) + ".</p>";
-    html += issueList(issues(stats));
+    html += issueList(issuesForStep(stats, 4));
+    return html;
+  }
+
+  function stepSkillsBag() {
+    const stats = applied().stats;
+    const bud = budgets(stats);
+    const bKeys = bagKeys();
+    const hasBagPts = bud.bag > 0;
+    let html = "<h2>Bagage</h2>";
+    html += '<p class="lead">Le <strong>bagage d\'expérience</strong> décrit un passé (guerre, police, etc.) <em>avant</em> l\'occupation actuelle. C\'est <strong>optionnel</strong> et demande l\'accord du Gardien des Arcanes. Il peut accorder des points de compétence bonus et une perte de Santé mentale.</p>';
+    html += bagageBlock();
+    if (hasBagPts) {
+      html += '<div class="budget">' + budgetPill("Points de bagage", spent("bag"), bud.bag) + "</div>";
+      html += '<p class="hint">Placez ces points sur les compétences liées à votre bagage (une fois les choix ci-dessus faits).</p>';
+      html += '<div class="skills-table mode-bag">';
+      html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Bagage</span><span>Total</span></div>';
+      bKeys.forEach(function (key) {
+        if (key === "Mythe de Cthulhu" && state.bagage === "myth") return;
+        const row = pt(key);
+        const base = baseOf(key, stats);
+        const total = totalOf(key, stats);
+        const bagOk = state.bagage !== "myth" && key !== "Mythe de Cthulhu";
+        const rowCls = "skill" + (total > CAP ? " skill-over-cap" : "");
+        html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
+        html += stepper(key, "bag", row.bag || 0, bagOk);
+        html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
+      });
+      html += "</div>";
+    } else {
+      html += '<p class="hint">Sans bagage (ou bagage sans points bonus), vous pouvez passer directement à l\'étape suivante.</p>';
+    }
+    html += issueList(issuesForStep(stats, 5));
     return html;
   }
 
   function bagageBlock() {
-    let html = "<details><summary>Bagage d'expérience (optionnel, avec l'accord du Gardien)</summary><select data-action=\"bagage\">";
+    let html = '<div class="bag-config"><label class="field"><span>Type de bagage</span><select data-action="bagage">';
     Object.keys(BAGAGES).forEach(function (id) {
       html += '<option value="' + id + '"' + (state.bagage === id ? " selected" : "") + ">" + esc(BAGAGES[id].name) + "</option>";
     });
@@ -724,7 +802,7 @@
     if (state.bagage === "myth") {
       html += '<div class="row"><button type="button" class="btn ghost" data-action="roll-myth">Mythe (1D10+5)</button><input data-bind="mythos" data-kind="myth" type="number" min="0" value="' + (state.mythos == null ? "" : state.mythos) + '"><label><input type="checkbox" data-action="believer" ' + (state.believer ? "checked" : "") + "> Croyant</label></div>";
     }
-    return html + "</details>";
+    return html + "</div>";
   }
 
   function issueList(list) {
@@ -1116,7 +1194,7 @@
     if (!btn || btn.tagName === "SELECT" || btn.tagName === "INPUT" || btn.tagName === "TEXTAREA") return;
     const action = btn.dataset.action;
     if (action === "goto") state.step = Number(btn.dataset.step);
-    if (action === "next") state.step = Math.min(5, state.step + 1);
+    if (action === "next") state.step = Math.min(LAST_STEP, state.step + 1);
     if (action === "prev") state.step = Math.max(0, state.step - 1);
     if (action === "roll-all") {
       ["FOR", "CON", "DEX", "APP", "POU"].forEach(function (s) { state.raw[s] = roll3(); });
@@ -1157,7 +1235,7 @@
     }
     if (action === "roll-myth") state.mythos = dice(1, 10) + 5;
     if (action === "print") {
-      state.step = 5;
+      state.step = LAST_STEP;
       render();
       setTimeout(function () { window.print(); }, 60);
       return;
@@ -1309,7 +1387,7 @@
       try {
         const data = JSON.parse(reader.result);
         state = loadState(data.state || data);
-        state.step = 5;
+        state.step = LAST_STEP;
         render();
       } catch (err) { window.alert("Ce fichier n'est pas une sauvegarde lisible."); }
     };
@@ -1333,7 +1411,7 @@
     const found = saves.find(function (s) { return s.id === id; });
     if (!found) return;
     state = loadState(found.state);
-    state.step = 5;
+    state.step = LAST_STEP;
   }
 
   function enforceCreationRules() {
@@ -1382,6 +1460,14 @@
     next.bagSci = raw.bagSci || ["", ""];
     next.assignRolls = raw.assignRolls || [];
     next.assignMap = raw.assignMap || {};
+    if (next.wizard !== WIZARD_LAYOUT && typeof next.step === "number") {
+      if (next.step === 4) next.step = 6;
+      else if (next.step === 5) next.step = LAST_STEP;
+      else if (next.step > 5) next.step = LAST_STEP;
+    }
+    next.wizard = WIZARD_LAYOUT;
+    if (typeof next.step !== "number" || next.step < 0) next.step = 0;
+    else if (next.step > LAST_STEP) next.step = LAST_STEP;
     return next;
   }
 
