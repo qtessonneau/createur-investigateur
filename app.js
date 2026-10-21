@@ -518,7 +518,7 @@
     const raw = currentRaw();
     const missing = missingStats();
     let html = '<h2>Caractéristiques</h2>';
-    html += '<p class="lead">FOR, CON, DEX, APP et POU : 3D6 × 5. TAI, INT et ÉDU : (2D6+6) × 5. Vous pouvez aussi saisir une valeur. Survolez un nom pour sa signification.</p><div class="actions"><button type="button" class="btn" data-action="roll-all">Tout lancer</button></div><div class="stats">';
+    html += '<p class="lead">FOR, CON, DEX, APP et POU : 3D6 × 5. TAI, INT et ÉDU : (2D6+6) × 5. Lancez caractéristique par caractéristique, ou saisissez une valeur. Survolez un nom pour sa signification.</p><div class="stats">';
     const formulas = { FOR: "3D6 × 5", CON: "3D6 × 5", TAI: "(2D6+6) × 5", DEX: "3D6 × 5", APP: "3D6 × 5", INT: "(2D6+6) × 5", POU: "3D6 × 5", "ÉDU": "(2D6+6) × 5" };
     R.STATS.forEach(function (s) {
       html += '<div class="stat"><h3>' + hover(s, HELP.stats[s]) + '</h3><div class="hint">' + formulas[s] + '</div><div class="row"><input data-bind="raw.' + s + '" data-kind="stat" type="number" min="0" max="99" value="' + (raw[s] == null ? "" : raw[s]) + '"><button type="button" class="btn ghost" data-action="roll-stat" data-stat="' + s + '">Lancer</button></div><div class="hint">Au final : ' + (missing.indexOf(s) >= 0 ? "—" : stats[s]) + "</div></div>";
@@ -1421,11 +1421,6 @@
     if (action === "goto") state.step = Number(btn.dataset.step);
     if (action === "next") state.step = Math.min(LAST_STEP, state.step + 1);
     if (action === "prev") state.step = Math.max(0, state.step - 1);
-    if (action === "roll-all") {
-      ["FOR", "CON", "DEX", "APP", "POU"].forEach(function (s) { state.raw[s] = roll3(); });
-      ["TAI", "INT", "ÉDU"].forEach(function (s) { state.raw[s] = roll26(); });
-      state.eduChecks = [];
-    }
     if (action === "roll-stat") {
       const s = btn.dataset.stat;
       state.raw[s] = (s === "TAI" || s === "INT" || s === "ÉDU") ? roll26() : roll3();
