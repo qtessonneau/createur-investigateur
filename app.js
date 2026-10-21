@@ -593,8 +593,41 @@
   }
 
   function stepper(key, field, value, enabled) {
-    if (!enabled) return "<span></span>";
+    if (!enabled) {
+      if (value > 0) return '<div class="point-readonly nums"><strong>' + value + "</strong></div>";
+      return '<div class="point-na" title="Points non utilisables ici">—</div>';
+    }
     return '<div class="stepper"><button type="button" data-action="point" data-key="' + esc(key) + '" data-field="' + field + '" data-delta="-5">−5</button><button type="button" data-action="point" data-key="' + esc(key) + '" data-field="' + field + '" data-delta="-1">−</button><input data-action="point-set" data-bind="pt-' + field + "-" + esc(key) + '" data-key="' + esc(key) + '" data-field="' + field + '" type="number" min="0" value="' + value + '"><button type="button" data-action="point" data-key="' + esc(key) + '" data-field="' + field + '" data-delta="1">+</button><button type="button" data-action="point" data-key="' + esc(key) + '" data-field="' + field + '" data-delta="5">+5</button></div>';
+  }
+
+  function budgetPill(label, used, max) {
+    const rest = max - used;
+    let cls = "";
+    if (max > 0) {
+      if (used > max) cls = "bad";
+      else if (used === max) cls = "good";
+      else if (used > 0) cls = "warn";
+    } else if (used === 0) cls = "good";
+    const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 100;
+    const restLine = max > 0
+      ? (rest > 0 ? "Il reste <strong>" + rest + "</strong> pt" : rest < 0 ? "Trop de points placés" : "Budget épuisé")
+      : "";
+    return '<div class="pill ' + cls + '"><span class="hint">' + label + '</span><strong class="budget-nums">' + used + " / " + max + "</strong>" + (restLine ? '<span class="budget-rest">' + restLine + "</span>" : "") + '<span class="budget-bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span></div>';
+  }
+
+  function sortSkillKeysForStep(keys, occKeys) {
+    const head = [];
+    if (keys.indexOf("Crédit") >= 0) head.push("Crédit");
+    occKeys.forEach(function (k) {
+      if (k && k !== "Crédit" && head.indexOf(k) < 0 && keys.indexOf(k) >= 0) head.push(k);
+    });
+    const tail = keys.filter(function (k) { return head.indexOf(k) < 0; });
+    tail.sort(function (a, b) { return labelOf(a).localeCompare(labelOf(b), "fr"); });
+    return head.concat(tail);
+  }
+
+  function skillSectionTitle(title, detail) {
+    return '<div class="skill-section"><strong>' + title + "</strong>" + (detail ? '<span class="skill-section-detail">' + detail + "</span>" : "") + "</div>";
   }
 
   function stepSkills() {
@@ -602,24 +635,45 @@
     const bud = budgets(stats);
     const occKeys = occupationKeys();
     const bKeys = bagKeys();
-    const keys = visibleKeys(stats);
-    const pill = function (label, used, max) {
-      const cls = used === max ? "good" : "bad";
-      return '<div class="pill ' + cls + '"><span class="hint">' + label + "</span><strong>" + used + " / " + max + "</strong></div>";
-    };
-    let html = "<h2>Compétences</h2><div class=\"budget\">" + pill("Occupation", spent("occ"), bud.occ) + pill("Intérêt (INT × 2)", spent("per"), bud.per);
-    if (bud.bag) html += pill("Bagage", spent("bag"), bud.bag);
+    const occ = occById(state.occupationId);
+    const hasBag = bud.bag > 0;
+    const keys = sortSkillKeysForStep(visibleKeys(stats), occKeys);
+    let html = "<h2>Compétences</h2>";
+    html += '<p class="lead">Répartissez d\'abord les <strong>points d\'occupation</strong> sur les compétences de votre métier (et le Crédit), puis les <strong>points d\'intérêt</strong> (INT × 2) où vous voulez. Plafond à la création : ' + CAP + " % par compétence.</p>";
+    html += '<div class="budget">' + budgetPill("Points d'occupation", spent("occ"), bud.occ) + budgetPill("Points d'intérêt (INT × 2)", spent("per"), bud.per);
+    if (hasBag) html += budgetPill("Points de bagage", spent("bag"), bud.bag);
     html += "</div>";
-    html += '<p class="hint">À la création, aucune compétence ne peut dépasser ' + CAP + ' %. Survolez un nom pour savoir à quoi elle sert.</p>';
-    html += '<div class="skill"><strong>Compétence</strong><span>Base</span><span>Occupation</span><span>Intérêt' + (bud.bag ? " / bagage" : "") + "</span><span>Total</span></div>";
+    html += '<p class="hint">Survolez un nom de compétence pour en savoir plus. Les tirets (—) indiquent qu\'on ne peut pas placer ce type de points sur la ligne.</p>';
+    html += '<div class="skills-table' + (hasBag ? " has-bag" : "") + '">';
+    html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Occupation</span><span>Intérêt</span>';
+    if (hasBag) html += "<span>Bagage</span>";
+    html += "<span>Total</span></div>";
+    let section = "";
     keys.forEach(function (key) {
+      const inOccBlock = key === "Crédit" || occKeys.indexOf(key) >= 0;
+      const nextSection = inOccBlock ? "occ" : "per";
+      if (nextSection !== section) {
+        section = nextSection;
+        if (section === "occ") {
+          const creditHint = occ ? "Crédit entre " + occ.credit[0] + " et " + occ.credit[1] + " %." : "";
+          html += skillSectionTitle("1 — Compétences d'occupation", creditHint || "Uniquement les lignes ci-dessous acceptent des points d'occupation.");
+        } else {
+          html += skillSectionTitle("2 — Points d'intérêt personnels", "Répartissez le reste de vos points d'intérêt sur les compétences de votre choix (y compris celles déjà augmentées à l'étape 1).");
+        }
+      }
       const row = pt(key);
       const base = baseOf(key, stats);
       const total = totalOf(key, stats);
       const occOk = occKeys.indexOf(key) >= 0 && key !== "Mythe de Cthulhu";
-      const bagOk = bKeys.indexOf(key) >= 0 && state.bagage !== "myth" && key !== "Mythe de Cthulhu";
-      html += '<div class="skill"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>" + stepper(key, "occ", row.occ || 0, occOk) + '<div>' + stepper(key, "per", row.per || 0, key !== "Mythe de Cthulhu") + (bud.bag ? stepper(key, "bag", row.bag || 0, bagOk) : "") + '</div><div class="nums"><strong>' + total + "</strong></div></div>";
+      const perOk = key !== "Mythe de Cthulhu";
+      const bagOk = hasBag && bKeys.indexOf(key) >= 0 && state.bagage !== "myth" && key !== "Mythe de Cthulhu";
+      const rowCls = "skill" + (inOccBlock ? " skill-occ-row" : "") + (total > CAP ? " skill-over-cap" : "");
+      html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
+      html += stepper(key, "occ", row.occ || 0, occOk) + stepper(key, "per", row.per || 0, perOk);
+      if (hasBag) html += stepper(key, "bag", row.bag || 0, bagOk);
+      html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
     });
+    html += "</div>";
     html += '<div class="actions"><select data-action="add-skill"><option value="">Ajouter une compétence d\'intérêt…</option>' + DATA.skills.filter(function (s) { return s.name !== "Crédit"; }).map(function (s) {
       return '<option value="' + esc(s.name) + '">' + esc(s.name) + (s.tags ? " (" + s.tags + ")" : "") + "</option>";
     }).join("") + '</select></div>';
