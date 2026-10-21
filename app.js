@@ -888,7 +888,7 @@
     const keys = keysForInterestAll(stats);
     let html = "<h2>Intérêt — liste complète</h2>";
     html += testBanner("Tout afficher", "Toutes les compétences standard, rares, armes et sciences d'un coup — pas d'ajout manuel, mais beaucoup de scroll.");
-    html += '<p class="lead">Même règle : points d\'intérêt (INT × 2), plafond ' + CAP + " %. Crédit exclu (étape Occupation).</p>";
+    html += '<p class="lead">Même règle : points d\'intérêt (INT × 2), plafond ' + CAP + ' %. Crédit exclu (étape Occupation).</p>';
     html += interestBudgetBlock(stats);
     html += '<p class="hint">' + keys.length + " lignes affichées.</p>";
     html += renderPerSkillTable(keys, stats);
@@ -902,7 +902,7 @@
     const keys = keysForInterestRareToggle(stats);
     let html = "<h2>Intérêt — case « rares »</h2>";
     html += testBanner("Case à cocher", "Tableau court par défaut ; cocher pour révéler les compétences rares et Conduite d'attelage.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Les spécialités (langues, etc.) passent toujours par les boutons de l\'étape « Test · boutons » ou la recherche.</p>";
+    html += '<p class="lead">Points d\'intérêt (INT × 2). Les spécialités (langues, etc.) passent toujours par les boutons de l\'étape « Test · boutons » ou la recherche.</p>';
     html += interestBudgetBlock(stats);
     html += '<label class="field toggle-rare"><input type="checkbox" data-action="show-rare" ' + (state.showRareSkills ? "checked" : "") + "> Afficher les compétences rares dans le tableau</label>";
     html += renderPerSkillTable(keys, stats);
@@ -916,7 +916,7 @@
     const keys = keysForInterestStep(stats);
     let html = "<h2>Intérêt — boutons</h2>";
     html += testBanner("Boutons / puces", "Tableau des compétences courantes + boutons pour ajouter une rare ou une spécialité.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Cliquez sur un bouton pour faire apparaître une ligne, puis placez vos points.</p>";
+    html += '<p class="lead">Points d\'intérêt (INT × 2). Cliquez sur un bouton pour faire apparaître une ligne, puis placez vos points.</p>';
     html += interestBudgetBlock(stats);
     html += renderPerSkillTable(keys, stats);
     html += renderInterestAddChips(stats);
@@ -936,7 +936,7 @@
     const addable = interestSearchAddable(stats, q);
     let html = "<h2>Intérêt — recherche</h2>";
     html += testBanner("Recherche", "Filtrer le tableau et ajouter une compétence absente via les résultats.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Cherchez une compétence par nom.</p>";
+    html += '<p class="lead">Points d\'intérêt (INT × 2). Cherchez une compétence par nom.</p>';
     html += interestBudgetBlock(stats);
     html += '<label class="field"><span>Rechercher une compétence</span><input data-bind="interestSearch" type="search" placeholder="Ex. Hypnose, Langues…" value="' + esc(q) + '"></label>';
     if (ql) html += '<p class="hint">' + keys.length + " ligne(s) dans le tableau correspondent.</p>";
