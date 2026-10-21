@@ -290,19 +290,23 @@ globalThis.INV_DATA = {
     },
     {
       "name": "Fléau",
-      "base": 10
+      "base": 10,
+      "rare": true
     },
     {
       "name": "Garrot",
-      "base": 15
+      "base": 15,
+      "rare": true
     },
     {
       "name": "Fouet",
-      "base": 5
+      "base": 5,
+      "rare": true
     },
     {
       "name": "Tronçonneuse",
-      "base": 10
+      "base": 10,
+      "rare": true
     }
   ],
   "firearms": [
@@ -316,23 +320,28 @@ globalThis.INV_DATA = {
     },
     {
       "name": "Arcs",
-      "base": 15
+      "base": 15,
+      "rare": true
     },
     {
       "name": "Mitraillettes",
-      "base": 15
+      "base": 15,
+      "rare": true
     },
     {
       "name": "Mitrailleuses",
-      "base": 10
+      "base": 10,
+      "rare": true
     },
     {
       "name": "Armes lourdes",
-      "base": 10
+      "base": 10,
+      "rare": true
     },
     {
       "name": "Lance-flammes",
-      "base": 10
+      "base": 10,
+      "rare": true
     }
   ],
   "sciences": [

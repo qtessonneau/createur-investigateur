@@ -664,11 +664,24 @@
     return bits.length > 1 && INTEREST_DROPDOWN_SPECS.indexOf(bits[0]) >= 0;
   }
 
-  function interestDropdownCatalog(parent) {
-    if (parent === "Combat rapproché") return (DATA.fighting || []).map(function (f) { return f.name; });
-    if (parent === "Combat à distance") return (DATA.firearms || []).map(function (f) { return f.name; });
-    if (parent === "Sciences") return DATA.sciences || [];
+  function interestSpecCatalog(parent) {
+    if (parent === "Combat rapproché") return DATA.fighting || [];
+    if (parent === "Combat à distance") return DATA.firearms || [];
+    if (parent === "Sciences") return (DATA.sciences || []).map(function (n) { return { name: n, base: 1 }; });
     return [];
+  }
+
+  function interestDropdownCatalog(parent) {
+    return interestSpecCatalog(parent).map(function (e) { return e.name; });
+  }
+
+  function specCatalogEntry(parent, specName) {
+    return interestSpecCatalog(parent).find(function (e) { return e.name === specName; }) || null;
+  }
+
+  function isSpecRare(parent, specName) {
+    const entry = specCatalogEntry(parent, specName);
+    return !!(entry && entry.rare);
   }
 
   function resolveInterestSpec(parent) {
@@ -725,7 +738,12 @@
   }
 
   function skillRareTag(key) {
-    const parent = String(key).split("::")[0];
+    const bits = String(key).split("::");
+    const parent = bits[0];
+    if (bits.length > 1 && INTEREST_DROPDOWN_SPECS.indexOf(parent) >= 0) {
+      if (isSpecRare(parent, bits[1])) return '<span class="tag-rare">rare</span>';
+      return "";
+    }
     const def = DATA.skills.find(function (s) { return s.name === parent; });
     if (def && def.tags.indexOf("rare") >= 0) return '<span class="tag-rare">rare</span>';
     return "";
@@ -752,7 +770,6 @@
 
   function renderInterestDropdownRow(parent, stats) {
     const spec = resolveInterestSpec(parent);
-    const list = interestDropdownCatalog(parent);
     const key = spec ? keyOf(parent, spec) : null;
     const row = key ? pt(key) : { occ: 0, per: 0 };
     const base = key ? baseOf(key, stats) : "—";
@@ -760,9 +777,10 @@
     const perOk = !!key && key !== "Mythe de Cthulhu";
     const rowCls = "skill skill-spec-picker" + (total > CAP ? " skill-over-cap" : "");
     let html = '<div class="' + rowCls + '">';
-    html += '<div class="skill-name-col"><div class="skill-name-line">' + skillName(parent, null) + '</div><select data-action="interest-spec" data-parent="' + esc(parent) + '">';
-    html += list.map(function (n) {
-      return '<option value="' + esc(n) + '"' + (spec === n ? " selected" : "") + ">" + esc(n) + "</option>";
+    html += '<div class="skill-name-col"><div class="skill-name-line">' + skillName(parent, null) + (spec && isSpecRare(parent, spec) ? skillRareTag(key) : "") + '</div><select data-action="interest-spec" data-parent="' + esc(parent) + '">';
+    html += interestSpecCatalog(parent).map(function (e) {
+      const label = e.name + (e.rare ? " (rare)" : "");
+      return '<option value="' + esc(e.name) + '"' + (spec === e.name ? " selected" : "") + ">" + esc(label) + "</option>";
     }).join("");
     html += "</select></div>";
     html += '<div class="nums">' + base + "</div>";
