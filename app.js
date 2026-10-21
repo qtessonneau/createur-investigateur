@@ -24,20 +24,13 @@
       o.slots = o.slots.map(simplify).filter(Boolean);
     });
   })();
-  const STEPS = [
-    "Identité", "Caractéristiques", "Métier", "Occupation", "Intérêt",
-    "Test · tout", "Test · rares", "Test · boutons", "Test · recherche",
-    "Bagage", "Profil", "Fiche",
-  ];
+  const STEPS = ["Identité", "Caractéristiques", "Métier", "Occupation", "Intérêt", "Bagage", "Profil", "Fiche"];
   const LAST_STEP = STEPS.length - 1;
   const STEP_INTEREST = 4;
-  const STEP_TEST_ALL = 5;
-  const STEP_TEST_RARE = 6;
-  const STEP_TEST_CHIPS = 7;
-  const STEP_TEST_SEARCH = 8;
-  const STEP_BAG = 9;
-  const WIZARD_LAYOUT = "skills-3-test-variants";
-  const WIZARD_LAYOUT_PREV = "skills-3";
+  const STEP_BAG = 5;
+  const INTEREST_DROPDOWN_SPECS = ["Combat rapproché", "Combat à distance", "Sciences"];
+  const WIZARD_LAYOUT = "skills-interest-full";
+  const WIZARD_LAYOUT_PREV = "skills-3-test-variants";
   const SPEC = ["Arts et métiers", "Combat à distance", "Combat rapproché", "Langues", "Langue maternelle", "Pilotage", "Savoir", "Sciences", "Survie"];
   const BAGAGES = {
     none: { name: "Aucun", points: 0 },
@@ -97,7 +90,7 @@
       profile: { ideology: "", people: "", places: "", treasures: "", traits: "", bond: "", phobias: "", scars: "", encounters: "", equipment: "", notes: "" },
       weapons: [0, 1, 2, 3].map(function () { return { name: "", skill: "", damage: "", range: "", shots: "", ammo: "", malfunction: "" }; }),
       occQuery: "", saveMsg: "",
-      showRareSkills: false, interestSearch: "",
+      interestSpec: {},
     };
   }
 
@@ -411,8 +404,7 @@
 
   function shell() {
     const steps = STEPS.map(function (name, i) {
-      const testCls = i >= STEP_TEST_ALL && i <= STEP_TEST_SEARCH ? " test-step" : "";
-      return '<button type="button" class="no-print' + testCls + " " + (state.step === i ? "active" : "") + '" data-action="goto" data-step="' + i + '">' + (i + 1) + ". " + name + "</button>";
+      return '<button type="button" class="no-print ' + (state.step === i ? "active" : "") + '" data-action="goto" data-step="' + i + '">' + (i + 1) + ". " + name + "</button>";
     }).join("");
     return '<header class="top no-print"><div class="brand"><h1>Créateur d\'investigateur</h1><p>Vos joueurs créent leur personnage pas à pas, puis téléchargent la fiche. Outil de table, non officiel : le livre reste la référence.</p></div></header><nav class="steps">' + steps + '</nav><main class="card no-print">' + body() + '</main>' + (state.step === LAST_STEP ? '<div class="sheet-wrap">' + sheetHtml() + "</div>" : "") + '<div class="nav no-print"><button type="button" class="btn secondary" data-action="prev"' + (state.step === 0 ? " disabled" : "") + '>Retour</button><button type="button" class="btn" data-action="next"' + (state.step === LAST_STEP ? " disabled" : "") + ">Continuer</button></div>";
   }
@@ -423,10 +415,6 @@
     if (state.step === 2) return stepOcc();
     if (state.step === 3) return stepSkillsOcc();
     if (state.step === STEP_INTEREST) return stepSkillsInterest();
-    if (state.step === STEP_TEST_ALL) return stepSkillsInterestAll();
-    if (state.step === STEP_TEST_RARE) return stepSkillsInterestRareToggle();
-    if (state.step === STEP_TEST_CHIPS) return stepSkillsInterestChips();
-    if (state.step === STEP_TEST_SEARCH) return stepSkillsInterestSearch();
     if (state.step === STEP_BAG) return stepSkillsBag();
     if (state.step === LAST_STEP - 1) return stepProfile();
     return stepSheet();
@@ -665,93 +653,127 @@
     });
   }
 
-  function addableInterestSkills(stats) {
-    const keys = keysForInterestStep(stats);
-    return DATA.skills.filter(function (s) {
-      if (s.name === "Crédit" || s.name === "Mythe de Cthulhu") return false;
-      if (s.tags.indexOf("spec") >= 0) return true;
-      return keys.indexOf(s.name) < 0;
-    });
+  function isInterestDropdownSpecKey(key) {
+    const bits = String(key).split("::");
+    return bits.length > 1 && INTEREST_DROPDOWN_SPECS.indexOf(bits[0]) >= 0;
   }
 
-  function visibleKeysInterestFull(stats) {
+  function interestDropdownCatalog(parent) {
+    if (parent === "Combat rapproché") return (DATA.fighting || []).map(function (f) { return f.name; });
+    if (parent === "Combat à distance") return (DATA.firearms || []).map(function (f) { return f.name; });
+    if (parent === "Sciences") return DATA.sciences || [];
+    return [];
+  }
+
+  function resolveInterestSpec(parent) {
+    if (!state.interestSpec) state.interestSpec = {};
+    const list = interestDropdownCatalog(parent);
+    let spec = state.interestSpec[parent];
+    if (spec && list.indexOf(spec) >= 0) return spec;
+    const sources = [] .concat(occupationKeys(), bagKeys(), state.extras || [], Object.keys(state.points || {}));
+    for (let i = 0; i < sources.length; i++) {
+      const bits = String(sources[i]).split("::");
+      if (bits[0] === parent && bits[1] && list.indexOf(bits[1]) >= 0) {
+        state.interestSpec[parent] = bits[1];
+        return bits[1];
+      }
+    }
+    if (parent === "Combat rapproché" && list.indexOf("Corps à corps") >= 0) spec = "Corps à corps";
+    else spec = list.length ? list[0] : "";
+    state.interestSpec[parent] = spec;
+    return spec;
+  }
+
+  function visibleKeysInterestList(stats) {
     const set = [];
-    function add(k) { if (k && k !== "Crédit" && set.indexOf(k) < 0) set.push(k); }
+    function add(k) {
+      if (!k || k === "Crédit" || isInterestDropdownSpecKey(k)) return;
+      if (set.indexOf(k) < 0) set.push(k);
+    }
     add("Esquive");
-    add("Combat rapproché::Corps à corps");
     add(keyOf("Langue maternelle", state.language || "Français"));
     DATA.skills.forEach(function (s) {
       if (s.tags.indexOf("spec") >= 0 || s.name === "Crédit" || s.name === "Mythe de Cthulhu") return;
       add(s.name);
     });
-    (DATA.fighting || []).forEach(function (f) { add(keyOf("Combat rapproché", f.name)); });
-    (DATA.firearms || []).forEach(function (f) { add(keyOf("Combat à distance", f.name)); });
-    (DATA.sciences || []).forEach(function (n) { add(keyOf("Sciences", n)); });
     occupationKeys().forEach(add);
     bagKeys().forEach(add);
-    state.extras.forEach(add);
+    (state.extras || []).forEach(add);
     if (mythosBonus() > 0) add("Mythe de Cthulhu");
     return set;
   }
 
-  function keysForInterestAll(stats) {
+  function keysForInterestList(stats) {
     const occKeys = occupationKeys();
-    return sortSkillKeysForStep(visibleKeysInterestFull(stats), occKeys);
+    return sortSkillKeysForStep(visibleKeysInterestList(stats), occKeys);
   }
 
-  function keysForInterestRareToggle(stats) {
-    const base = keysForInterestStep(stats);
-    if (!state.showRareSkills) return base;
-    const extra = [];
-    DATA.skills.forEach(function (s) {
-      if (s.name === "Crédit" || s.name === "Mythe de Cthulhu") return;
-      const optional = s.tags.indexOf("rare") >= 0 || s.name === "Conduite d'attelage";
-      if (!optional || base.indexOf(s.name) >= 0) return;
-      extra.push(s.name);
+  function mergedInterestRows(stats) {
+    const items = keysForInterestList(stats).map(function (key) {
+      return { kind: "skill", key: key, sort: labelOf(key) };
     });
-    extra.sort(function (a, b) { return labelOf(a).localeCompare(labelOf(b), "fr"); });
-    return base.concat(extra);
-  }
-
-  function interestCatalogEntries() {
-    const out = [];
-    DATA.skills.forEach(function (s) {
-      if (s.name === "Crédit" || s.name === "Mythe de Cthulhu") return;
-      let kind = "skill";
-      if (s.tags.indexOf("rare") >= 0) kind = "rare";
-      else if (s.tags.indexOf("spec") >= 0) kind = "spec";
-      out.push({ name: s.name, label: s.name, kind: kind });
+    INTEREST_DROPDOWN_SPECS.forEach(function (parent) {
+      items.push({ kind: "dropdown", parent: parent, sort: parent });
     });
-    return out;
+    items.sort(function (a, b) { return a.sort.localeCompare(b.sort, "fr"); });
+    return items;
   }
 
-  function interestSearchAddable(stats, query) {
-    const inTable = keysForInterestStep(stats);
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return [];
-    return interestCatalogEntries().filter(function (e) {
-      if (e.label.toLowerCase().indexOf(q) < 0) return false;
-      if (e.kind === "spec") return true;
-      return inTable.indexOf(e.name) < 0;
-    });
+  function skillRareTag(key) {
+    const parent = String(key).split("::")[0];
+    const def = DATA.skills.find(function (s) { return s.name === parent; });
+    if (def && def.tags.indexOf("rare") >= 0) return '<span class="tag-rare">rare</span>';
+    return "";
   }
 
-  function testBanner(title, detail) {
-    return '<p class="test-banner"><strong>Prototype — ' + esc(title) + "</strong> " + esc(detail) + "</p>";
+  function renderInterestSkillNameCell(key) {
+    const bits = String(key).split("::");
+    return '<div class="skill-name-col"><div class="skill-name-line">' + skillName(bits[0], bits[1]) + skillRareTag(key) + "</div></div>";
   }
 
-  function renderPerSkillTable(keys, stats) {
+  function renderInterestDataRow(key, stats) {
+    const row = pt(key);
+    const base = baseOf(key, stats);
+    const total = totalOf(key, stats);
+    const perOk = key !== "Mythe de Cthulhu";
+    const rowCls = "skill" + (total > CAP ? " skill-over-cap" : "");
+    let html = '<div class="' + rowCls + '">';
+    html += renderInterestSkillNameCell(key);
+    html += '<div class="nums">' + base + "</div>";
+    html += occPointsDisplay(key) + stepper(key, "per", row.per || 0, perOk);
+    html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
+    return html;
+  }
+
+  function renderInterestDropdownRow(parent, stats) {
+    const spec = resolveInterestSpec(parent);
+    const list = interestDropdownCatalog(parent);
+    const key = spec ? keyOf(parent, spec) : null;
+    const row = key ? pt(key) : { occ: 0, per: 0 };
+    const base = key ? baseOf(key, stats) : "—";
+    const total = key ? totalOf(key, stats) : 0;
+    const perOk = !!key && key !== "Mythe de Cthulhu";
+    const rowCls = "skill skill-spec-picker" + (total > CAP ? " skill-over-cap" : "");
+    let html = '<div class="' + rowCls + '">';
+    html += '<div class="skill-name-col"><div class="skill-name-line">' + skillName(parent, null) + '</div><select data-action="interest-spec" data-parent="' + esc(parent) + '">';
+    html += list.map(function (n) {
+      return '<option value="' + esc(n) + '"' + (spec === n ? " selected" : "") + ">" + esc(n) + "</option>";
+    }).join("");
+    html += "</select></div>";
+    html += '<div class="nums">' + base + "</div>";
+    if (key) html += occPointsDisplay(key) + stepper(key, "per", row.per || 0, perOk);
+    else html += '<div class="point-na">—</div><div class="point-na">—</div>';
+    html += '<div class="nums skill-total"><strong>' + (key ? total : "—") + "</strong></div></div>";
+    return html;
+  }
+
+  function renderInterestFullTable(stats) {
+    const rows = mergedInterestRows(stats);
     let html = '<div class="skills-table mode-per">';
     html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Occ.</span><span>Intérêt</span><span>Total</span></div>';
-    keys.forEach(function (key) {
-      const row = pt(key);
-      const base = baseOf(key, stats);
-      const total = totalOf(key, stats);
-      const perOk = key !== "Mythe de Cthulhu";
-      const rowCls = "skill" + (total > CAP ? " skill-over-cap" : "");
-      html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
-      html += occPointsDisplay(key) + stepper(key, "per", row.per || 0, perOk);
-      html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
+    rows.forEach(function (item) {
+      if (item.kind === "skill") html += renderInterestDataRow(item.key, stats);
+      else html += renderInterestDropdownRow(item.parent, stats);
     });
     return html + "</div>";
   }
@@ -770,37 +792,6 @@
     return issueList(issuesForStep(stats, step));
   }
 
-  function renderInterestAddChips(stats) {
-    const addable = addableInterestSkills(stats);
-    if (!addable.length) return '<p class="hint">Toutes les compétences disponibles sont déjà dans le tableau.</p>';
-    const rares = addable.filter(function (s) { return s.tags.indexOf("rare") >= 0; });
-    const specs = addable.filter(function (s) { return s.tags.indexOf("spec") >= 0; });
-    const other = addable.filter(function (s) { return s.tags.indexOf("rare") < 0 && s.tags.indexOf("spec") < 0; });
-    let html = "";
-    if (specs.length) {
-      html += "<h3>Spécialités</h3><p class=\"hint\">Cliquez pour ajouter une ligne (langue, science, arme…).</p><div class=\"skill-chips\">";
-      html += specs.map(function (s) {
-        return '<button type="button" class="btn ghost chip" data-action="add-skill-chip" data-name="' + esc(s.name) + '">+ ' + esc(s.name) + "</button>";
-      }).join("");
-      html += "</div>";
-    }
-    if (rares.length) {
-      html += "<h3>Compétences rares</h3><div class=\"skill-chips\">";
-      html += rares.map(function (s) {
-        return '<button type="button" class="btn ghost chip" data-action="add-skill-chip" data-name="' + esc(s.name) + '">' + esc(s.name) + "</button>";
-      }).join("");
-      html += "</div>";
-    }
-    if (other.length) {
-      html += "<h3>Autres</h3><div class=\"skill-chips\">";
-      html += other.map(function (s) {
-        return '<button type="button" class="btn ghost chip" data-action="add-skill-chip" data-name="' + esc(s.name) + '">' + esc(s.name) + "</button>";
-      }).join("");
-      html += "</div>";
-    }
-    return html;
-  }
-
   function occPointsDisplay(key) {
     const v = pt(key).occ || 0;
     if (v > 0) return '<div class="nums point-readonly"><strong>' + v + "</strong></div>";
@@ -814,7 +805,7 @@
         return /occupation|Crédit|Choisissez une occupation|compétences d'occupation/i.test(m);
       });
     }
-    if (step >= STEP_INTEREST && step <= STEP_TEST_SEARCH) {
+    if (step === STEP_INTEREST) {
       return all.filter(function (m) {
         return /intérêt|plafond|dépasse/i.test(m);
       });
@@ -861,98 +852,13 @@
 
   function stepSkillsInterest() {
     const stats = applied().stats;
-    const keys = keysForInterestStep(stats);
-    const addable = addableInterestSkills(stats);
     let html = "<h2>Intérêt</h2>";
-    html += '<p class="lead">Les <strong>points d\'intérêt personnels</strong> (INT × 2) permettent de distinguer votre investigateur : passe-temps, savoirs annexes, ou renfort d\'une compétence de métier. Répartissez-les librement sur les compétences ci-dessous. Le <strong>Crédit</strong> se règle uniquement à l\'étape Occupation.</p>';
+    html += '<p class="lead">Les <strong>points d\'intérêt personnels</strong> (INT × 2) permettent de distinguer votre investigateur. Toutes les compétences figurent ci-dessous ; le <strong>Crédit</strong> se règle à l\'étape Occupation. Pour le combat et les sciences, choisissez la spécialité dans le menu.</p>';
     html += interestBudgetBlock(stats);
-    html += '<p class="hint">Plafond à la création : ' + CAP + " %. La colonne « Occ. » rappelle ce que vous avez déjà placé à l'étape précédente. Les étapes 6 à 9 du parcours proposent d'autres façons d'ajouter des compétences (tests).</p>";
-    html += renderPerSkillTable(keys, stats);
-    html += "<h3>Compétence absente du tableau ?</h3>";
-    html += '<p class="hint">Liste déroulante actuelle (référence). Voir les pages <strong>Test · …</strong> pour comparer.</p>';
-    if (addable.length) {
-      html += '<div class="actions"><select data-action="add-skill"><option value="">Choisir une compétence à ajouter…</option>' + addable.map(function (s) {
-        const tag = s.tags.indexOf("rare") >= 0 ? "rare" : s.tags.indexOf("spec") >= 0 ? "spécialité" : "";
-        return '<option value="' + esc(s.name) + '">' + esc(s.name) + (tag ? " (" + tag + ")" : "") + "</option>";
-      }).join("") + "</select></div>";
-    } else {
-      html += '<p class="hint">Toutes les compétences disponibles sont déjà dans le tableau.</p>';
-    }
+    html += '<p class="hint">Plafond à la création : ' + CAP + " %. La colonne « Occ. » rappelle l'étape Occupation. Les compétences marquées <span class=\"tag-rare\">rare</span> le sont au sens du livre.</p>";
+    html += renderInterestFullTable(stats);
     html += interestLifeBlock(stats);
     html += interestIssuesBlock(stats, STEP_INTEREST);
-    return html;
-  }
-
-  function stepSkillsInterestAll() {
-    const stats = applied().stats;
-    const keys = keysForInterestAll(stats);
-    let html = "<h2>Intérêt — liste complète</h2>";
-    html += testBanner("Tout afficher", "Toutes les compétences standard, rares, armes et sciences d'un coup — pas d'ajout manuel, mais beaucoup de scroll.");
-    html += '<p class="lead">Même règle : points d\'intérêt (INT × 2), plafond ' + CAP + ' %. Crédit exclu (étape Occupation).</p>';
-    html += interestBudgetBlock(stats);
-    html += '<p class="hint">' + keys.length + " lignes affichées.</p>";
-    html += renderPerSkillTable(keys, stats);
-    html += interestLifeBlock(stats);
-    html += interestIssuesBlock(stats, STEP_TEST_ALL);
-    return html;
-  }
-
-  function stepSkillsInterestRareToggle() {
-    const stats = applied().stats;
-    const keys = keysForInterestRareToggle(stats);
-    let html = "<h2>Intérêt — case « rares »</h2>";
-    html += testBanner("Case à cocher", "Tableau court par défaut ; cocher pour révéler les compétences rares et Conduite d'attelage.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Les spécialités (langues, etc.) passent toujours par les boutons de l\'étape « Test · boutons » ou la recherche.</p>';
-    html += interestBudgetBlock(stats);
-    html += '<label class="field toggle-rare"><input type="checkbox" data-action="show-rare" ' + (state.showRareSkills ? "checked" : "") + "> Afficher les compétences rares dans le tableau</label>";
-    html += renderPerSkillTable(keys, stats);
-    html += interestLifeBlock(stats);
-    html += interestIssuesBlock(stats, STEP_TEST_RARE);
-    return html;
-  }
-
-  function stepSkillsInterestChips() {
-    const stats = applied().stats;
-    const keys = keysForInterestStep(stats);
-    let html = "<h2>Intérêt — boutons</h2>";
-    html += testBanner("Boutons / puces", "Tableau des compétences courantes + boutons pour ajouter une rare ou une spécialité.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Cliquez sur un bouton pour faire apparaître une ligne, puis placez vos points.</p>';
-    html += interestBudgetBlock(stats);
-    html += renderPerSkillTable(keys, stats);
-    html += renderInterestAddChips(stats);
-    html += interestLifeBlock(stats);
-    html += interestIssuesBlock(stats, STEP_TEST_CHIPS);
-    return html;
-  }
-
-  function stepSkillsInterestSearch() {
-    const stats = applied().stats;
-    const q = state.interestSearch || "";
-    let keys = keysForInterestStep(stats);
-    const ql = q.trim().toLowerCase();
-    if (ql) {
-      keys = keys.filter(function (k) { return labelOf(k).toLowerCase().indexOf(ql) >= 0; });
-    }
-    const addable = interestSearchAddable(stats, q);
-    let html = "<h2>Intérêt — recherche</h2>";
-    html += testBanner("Recherche", "Filtrer le tableau et ajouter une compétence absente via les résultats.");
-    html += '<p class="lead">Points d\'intérêt (INT × 2). Cherchez une compétence par nom.</p>';
-    html += interestBudgetBlock(stats);
-    html += '<label class="field"><span>Rechercher une compétence</span><input data-bind="interestSearch" type="search" placeholder="Ex. Hypnose, Langues…" value="' + esc(q) + '"></label>';
-    if (ql) html += '<p class="hint">' + keys.length + " ligne(s) dans le tableau correspondent.</p>";
-    html += renderPerSkillTable(keys, stats);
-    if (ql && addable.length) {
-      html += "<h3>Ajouter au tableau</h3><div class=\"skill-chips\">";
-      html += addable.map(function (e) {
-        const tag = e.kind === "spec" ? "spécialité" : e.kind === "rare" ? "rare" : "";
-        return '<button type="button" class="btn ghost chip" data-action="add-skill-chip" data-name="' + esc(e.name) + '">+ ' + esc(e.label) + (tag ? " (" + tag + ")" : "") + "</button>";
-      }).join("");
-      html += "</div>";
-    } else if (ql && !addable.length) {
-      html += '<p class="hint">Aucune compétence à ajouter pour cette recherche (ou déjà dans le tableau).</p>';
-    }
-    html += interestLifeBlock(stats);
-    html += interestIssuesBlock(stats, STEP_TEST_SEARCH);
     return html;
   }
 
@@ -1476,7 +1382,6 @@
         localStorage.removeItem("inv-draft");
       }
     }
-    if (action === "add-skill-chip") addSkill(btn.dataset.name);
     render();
   }
 
@@ -1489,7 +1394,10 @@
     if (action === "pick-index") ensurePick(el.dataset.index).index = el.value === "" ? "" : Number(el.value);
     if (action === "pick-text" || action === "pick-list" || action === "pick-social" || action === "pick-any" || action === "pick-any-spec" || action === "pick-among" || action === "pick-among-text") updatePick(el);
     if (action === "add-skill") addSkill(el.value);
-    if (action === "show-rare") state.showRareSkills = el.checked;
+    if (action === "interest-spec") {
+      if (!state.interestSpec) state.interestSpec = {};
+      state.interestSpec[el.dataset.parent] = el.value;
+    }
     if (action === "bagage") {
       Object.keys(state.points).forEach(function (k) { state.points[k].bag = 0; });
       state.bagage = el.value;
@@ -1571,11 +1479,6 @@
     }
     if (!el.dataset.bind) return;
     let value = el.value;
-    if (el.dataset.bind === "interestSearch") {
-      state.interestSearch = value;
-      render();
-      return;
-    }
     if (el.dataset.bind === "mythos") { state.mythos = value === "" ? null : Number(value); render(); return; }
     if (el.dataset.bind.indexOf("raw.") === 0) {
       const stat = el.dataset.bind.split(".")[1];
@@ -1693,11 +1596,11 @@
     next.bagSci = raw.bagSci || ["", ""];
     next.assignRolls = raw.assignRolls || [];
     next.assignMap = raw.assignMap || {};
-    next.showRareSkills = !!raw.showRareSkills;
-    next.interestSearch = raw.interestSearch || "";
+    next.interestSpec = raw.interestSpec || {};
     if (next.wizard !== WIZARD_LAYOUT && typeof next.step === "number") {
-      if (next.wizard === WIZARD_LAYOUT_PREV && next.step >= STEP_BAG - 4) {
-        next.step += STEP_TEST_SEARCH - STEP_INTEREST;
+      if (next.wizard === WIZARD_LAYOUT_PREV) {
+        if (next.step >= 9) next.step -= 4;
+        else if (next.step >= 5 && next.step <= 8) next.step = STEP_INTEREST;
       } else if (!next.wizard || next.wizard === "legacy") {
         if (next.step === 4) next.step = 6;
         else if (next.step >= 5) next.step = LAST_STEP;
