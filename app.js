@@ -81,9 +81,9 @@
     const raw = {};
     R.STATS.forEach(function (s) { raw[s] = null; });
     return {
-      step: 0, name: "", player: "", sex: "", age: 30, birth: "", residence: "",
+      step: 0, name: "", player: "", sex: "", age: null, birth: "", residence: "",
       language: "Français", portrait: "", description: "", method: "classic", raw: raw,
-      chanceRolls: [], chance: null, mods: R.defaultMods(30), eduChecks: [],
+      chanceRolls: [], chance: null, mods: { FOR: 0, CON: 0, TAI: 0, DEX: 0, APP: 0 }, eduChecks: [],
       assignRolls: [], assignMap: {}, assignKind: "", occupationId: "", formulaStat: "", picks: {},
       points: {}, extras: [], bagage: "none", bagSan: null, mythos: null, believer: false,
       bagSpec: {}, bagSocial: [], bagFirearm: "", bagFight: "", bagSci: ["", ""],
@@ -223,7 +223,8 @@
   }
 
   function applied() {
-    return R.applyCharacteristics(numericRaw(), state.age, state.mods, state.eduChecks);
+    const ageForRules = hasAge() ? state.age : 25;
+    return R.applyCharacteristics(numericRaw(), ageForRules, hasAge() ? state.mods : { FOR: 0, CON: 0, TAI: 0, DEX: 0, APP: 0 }, hasAge() ? state.eduChecks : []);
   }
 
   function pt(key) {
@@ -368,13 +369,16 @@
     if (!state.name.trim()) list.push("Indiquez le nom de l'investigateur.");
     missingStats().forEach(function (s) { list.push("Caractéristique manquante : " + s + "."); });
     if (state.chance == null) list.push("La Chance n'a pas été tirée.");
-    const band = R.bandFor(state.age);
-    const pool = R.poolTotal(state.age);
-    const used = band.pools.reduce(function (sum, p) {
-      return sum + p.stats.reduce(function (s, k) { return s + (Number(state.mods[k]) || 0); }, 0);
-    }, 0);
-    if (used !== pool) list.push("Les malus d'âge ne sont pas entièrement répartis (" + used + " / " + pool + ").");
-    if (state.eduChecks.length < band.checks) list.push("Il reste " + (band.checks - state.eduChecks.length) + " test(s) d'Éducation à lancer.");
+    if (!hasAge()) list.push("Indiquez l'âge (15 à 89 ans) à l'étape Identité.");
+    else {
+      const band = R.bandFor(state.age);
+      const pool = R.poolTotal(state.age);
+      const used = band.pools.reduce(function (sum, p) {
+        return sum + p.stats.reduce(function (s, k) { return s + (Number(state.mods[k]) || 0); }, 0);
+      }, 0);
+      if (used !== pool) list.push("Les malus d'âge ne sont pas entièrement répartis (" + used + " / " + pool + ").");
+      if (state.eduChecks.length < band.checks) list.push("Il reste " + (band.checks - state.eduChecks.length) + " test(s) d'Éducation à lancer.");
+    }
     const occ = occById(state.occupationId);
     if (!occ) list.push("Choisissez une occupation.");
     else {
@@ -398,7 +402,7 @@
     if (spent("per") !== bud.per) list.push("Points d'intérêt : " + spent("per") + " utilisés sur " + bud.per + ".");
     if (bud.bag && spent("bag") !== bud.bag) list.push("Points de bagage : " + spent("bag") + " utilisés sur " + bud.bag + ".");
     const bag = BAGAGES[state.bagage];
-    if (bag && bag.minAge && state.age < bag.minAge) list.push("Ce bagage demande au moins " + bag.minAge + " ans.");
+    if (bag && bag.minAge && hasAge() && state.age < bag.minAge) list.push("Ce bagage demande au moins " + bag.minAge + " ans.");
     if (state.bagage === "myth" && !state.mythos) list.push("Lancez ou saisissez le niveau de Mythe de Cthulhu.");
     visibleKeys(stats).forEach(function (k) {
       const row = pt(k);
@@ -422,9 +426,20 @@
     }
   }
 
+  function hasAge() {
+    const n = Number(state.age);
+    return state.age !== null && state.age !== "" && Number.isFinite(n) && n >= 15 && n <= 89;
+  }
+
   function setAge(age) {
-    const prev = R.bandFor(state.age).id;
-    state.age = Math.max(15, Math.min(89, Number(age) || 15));
+    const raw = String(age == null ? "" : age).trim();
+    if (!raw) {
+      state.age = null;
+      return;
+    }
+    const next = Math.max(15, Math.min(89, Number(raw) || 15));
+    const prev = hasAge() ? R.bandFor(state.age).id : null;
+    state.age = next;
     if (R.bandFor(state.age).id !== prev) {
       state.mods = R.defaultMods(state.age);
       state.eduChecks = [];
@@ -503,7 +518,7 @@
       '<label class="field"><span>Genre</span><select data-bind="sex" data-action="bind">' + ["", "Femme", "Homme", "Autre", "Non précisé"].map(function (g) {
         return '<option value="' + esc(g) + '"' + (state.sex === g ? " selected" : "") + ">" + esc(g || "—") + "</option>";
       }).join("") + "</select></label>" +
-      '<label class="field"><span>Âge (15 à 89)</span><input data-bind="age" inputmode="numeric" maxlength="2" value="' + esc(state.age) + '"></label>' +
+      '<label class="field"><span>Âge (15 à 89)</span><input data-bind="age" inputmode="numeric" maxlength="2" placeholder="—" value="' + esc(state.age == null ? "" : state.age) + '"></label>' +
       field("Langue maternelle", "language", state.language) +
       field("Lieu de naissance", "birth", state.birth) +
       field("Résidence", "residence", state.residence) +
@@ -528,12 +543,16 @@
   }
 
   function chanceBlock() {
-    const band = R.bandFor(state.age);
+    const band = hasAge() ? R.bandFor(state.age) : null;
     const rolls = state.chanceRolls.length ? "Jets : " + state.chanceRolls.join(", ") : "";
-    return '<div class="stat" style="margin-top:12px"><h3>' + hover("Chance", HELP.stats.Chance) + '</h3><p class="hint">3D6 × 5' + (band.luckRolls === 2 ? ". Entre 15 et 19 ans, deux jets, on garde le meilleur." : "") + '</p><div class="row"><strong>' + (state.chance == null ? "—" : state.chance) + '</strong><button type="button" class="btn ghost" data-action="roll-chance">Lancer</button><span class="hint">' + rolls + "</span></div></div>";
+    const luckHint = band && band.luckRolls === 2 ? ". Entre 15 et 19 ans, deux jets, on garde le meilleur." : "";
+    return '<div class="stat" style="margin-top:12px"><h3>' + hover("Chance", HELP.stats.Chance) + '</h3><p class="hint">3D6 × 5' + luckHint + '</p><div class="row"><strong>' + (state.chance == null ? "—" : state.chance) + '</strong><button type="button" class="btn ghost" data-action="roll-chance">Lancer</button><span class="hint">' + rolls + "</span></div></div>";
   }
 
   function ageBlock(app) {
+    if (!hasAge()) {
+      return '<p class="warn">Indiquez l\'âge (15 à 89 ans) à l\'étape Identité pour appliquer les effets d\'âge et les tests d\'Éducation.</p>';
+    }
     const band = app.band;
     let html = "<h3>Âge : " + state.age + " ans</h3>";
     if (!band.pools.length && !band.app && !band.eduDelta && band.checks) html += "<p>Un test d'expérience en ÉDU.</p>";
@@ -571,7 +590,7 @@
       ["Santé Mentale", stats.POU],
       ["Impact", imp.text],
       ["Carrure", imp.build],
-      ["Mouvement", R.movement(stats.FOR, stats.DEX, stats.TAI, state.age)],
+      ["Mouvement", hasAge() ? R.movement(stats.FOR, stats.DEX, stats.TAI, state.age) : "—"],
       ["Chance", state.chance == null ? "—" : state.chance],
       ["FOR + TAI", imp.total],
     ];
@@ -1002,7 +1021,7 @@
     const money = financesNow(stats);
     const occ = occById(state.occupationId);
     const profile = state.profile;
-    const mov = known ? R.movement(stats.FOR, stats.DEX, stats.TAI, state.age) : null;
+    const mov = known && hasAge() ? R.movement(stats.FOR, stats.DEX, stats.TAI, state.age) : null;
 
     function pad(n) { return (n < 10 ? "0" : "") + n; }
     function cells(from, to, mark, max) {
@@ -1241,7 +1260,7 @@
       + '<div class="id-line"><b>Nom</b><span>' + esc(state.name) + "</span></div>"
       + '<div class="id-line"><b>Joueur</b><span>' + esc(state.player) + "</span></div>"
       + '<div class="id-line"><b>Occupation</b><span>' + esc(occ ? occLabel(occ) : "") + "</span></div>"
-      + '<div class="id-pair"><div class="id-line"><b>Sexe</b><span>' + esc(state.sex) + '</span></div><div class="id-line"><b>Âge</b><span>' + esc(state.age) + "</span></div></div>"
+      + '<div class="id-pair"><div class="id-line"><b>Sexe</b><span>' + esc(state.sex) + '</span></div><div class="id-line"><b>Âge</b><span>' + esc(hasAge() ? state.age : "") + "</span></div></div>"
       + '<div class="id-line"><b>Résidence</b><span>' + esc(state.residence) + "</span></div>"
       + '<div class="id-line"><b>Lieu de naissance</b><span>' + esc(state.birth) + "</span></div>"
       + (state.portrait ? '<img class="portrait" alt="" src="' + state.portrait + '">' : "")
@@ -1468,7 +1487,8 @@
     if (el.dataset.bind === "age") {
       const digits = String(el.value).replace(/\D/g, "").slice(0, 2);
       if (el.value !== digits) el.value = digits;
-      if (digits.length === 2) setAge(digits);
+      if (!digits.length) state.age = null;
+      else if (digits.length === 2) setAge(digits);
       return;
     }
     focus = { id: el.dataset.bind || "", sel: el.selectionStart };
@@ -1593,7 +1613,10 @@
     if (!raw || typeof raw !== "object") return base;
     const next = Object.assign(base, raw);
     next.raw = Object.assign(blank().raw, raw.raw || {});
-    next.mods = Object.assign(R.defaultMods(next.age || 30), raw.mods || {});
+    if (next.age === "" || next.age === undefined) next.age = null;
+    const ageNum = Number(next.age);
+    const ageOk = next.age !== null && Number.isFinite(ageNum) && ageNum >= 15 && ageNum <= 89;
+    next.mods = Object.assign(ageOk ? R.defaultMods(next.age) : { FOR: 0, CON: 0, TAI: 0, DEX: 0, APP: 0 }, raw.mods || {});
     next.profile = Object.assign(blank().profile, raw.profile || {});
     next.points = raw.points || {};
     next.picks = raw.picks || {};
