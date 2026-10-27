@@ -24,13 +24,13 @@
       o.slots = o.slots.map(simplify).filter(Boolean);
     });
   })();
-  const STEPS = ["Identité", "Caractéristiques", "Métier", "Occupation", "Intérêt", "Bagage", "Profil", "Fiche"];
+  const STEPS = ["Identité", "Caractéristiques", "Métier", "Occupation", "Intérêt", "Profil", "Fiche"];
   const LAST_STEP = STEPS.length - 1;
   const STEP_INTEREST = 4;
-  const STEP_BAG = 5;
   const INTEREST_DROPDOWN_SPECS = ["Combat rapproché", "Combat à distance", "Sciences"];
-  const WIZARD_LAYOUT = "skills-interest-full";
-  const WIZARD_LAYOUT_PREV = "skills-3-test-variants";
+  const WIZARD_LAYOUT = "skills-no-bag";
+  const WIZARD_LAYOUT_PREV = "skills-interest-full";
+  const WIZARD_LAYOUT_TEST = "skills-3-test-variants";
   const SPEC = ["Arts et métiers", "Combat à distance", "Combat rapproché", "Langues", "Langue maternelle", "Pilotage", "Savoir", "Sciences", "Survie"];
   const BAGAGES = {
     none: { name: "Aucun", points: 0 },
@@ -488,7 +488,6 @@
     if (state.step === 2) return stepOcc();
     if (state.step === 3) return stepSkillsOcc();
     if (state.step === STEP_INTEREST) return stepSkillsInterest();
-    if (state.step === STEP_BAG) return stepSkillsBag();
     if (state.step === LAST_STEP - 1) return stepProfile();
     return stepSheet();
   }
@@ -900,11 +899,6 @@
         return /intérêt|plafond|dépasse/i.test(m);
       });
     }
-    if (step === STEP_BAG) {
-      return all.filter(function (m) {
-        return /bagage|Mythe/i.test(m);
-      });
-    }
     return all;
   }
 
@@ -950,81 +944,6 @@
     html += interestLifeBlock(stats);
     html += interestIssuesBlock(stats, STEP_INTEREST);
     return html;
-  }
-
-  function stepSkillsBag() {
-    const stats = applied().stats;
-    const bud = budgets(stats);
-    const bKeys = bagKeys();
-    const hasBagPts = bud.bag > 0;
-    let html = "<h2>Bagage</h2>";
-    html += '<p class="lead">Le <strong>bagage d\'expérience</strong> décrit un passé (guerre, police, etc.) <em>avant</em> l\'occupation actuelle. C\'est <strong>optionnel</strong> et demande l\'accord du Gardien des Arcanes. Il peut accorder des points de compétence bonus et une perte de Santé mentale.</p>';
-    html += bagageBlock();
-    if (hasBagPts) {
-      html += '<div class="budget">' + budgetPill("Points de bagage", spent("bag"), bud.bag) + "</div>";
-      html += '<p class="hint">Placez ces points sur les compétences liées à votre bagage (une fois les choix ci-dessus faits).</p>';
-      html += '<div class="skills-table mode-bag">';
-      html += '<div class="skill head"><strong>Compétence</strong><span>Base</span><span>Bagage</span><span>Total</span></div>';
-      bKeys.forEach(function (key) {
-        if (key === "Mythe de Cthulhu" && state.bagage === "myth") return;
-        const row = pt(key);
-        const base = baseOf(key, stats);
-        const total = totalOf(key, stats);
-        const bagOk = state.bagage !== "myth" && key !== "Mythe de Cthulhu";
-        const rowCls = "skill" + (total > CAP ? " skill-over-cap" : "");
-        html += '<div class="' + rowCls + '"><div>' + skillName(key.split("::")[0], key.split("::")[1]) + '</div><div class="nums">' + base + "</div>";
-        html += stepper(key, "bag", row.bag || 0, bagOk);
-        html += '<div class="nums skill-total"><strong>' + total + "</strong></div></div>";
-      });
-      html += "</div>";
-    } else {
-      html += '<p class="hint">Sans bagage (ou bagage sans points bonus), vous pouvez passer directement à l\'étape suivante.</p>';
-    }
-    html += issueList(issuesForStep(stats, STEP_BAG));
-    return html;
-  }
-
-  function bagageBlock() {
-    let html = '<div class="bag-config"><label class="field"><span>Type de bagage</span><select data-action="bagage">';
-    Object.keys(BAGAGES).forEach(function (id) {
-      html += '<option value="' + id + '"' + (state.bagage === id ? " selected" : "") + ">" + esc(BAGAGES[id].name) + "</option>";
-    });
-    html += "</select>";
-    const bag = BAGAGES[state.bagage];
-    if (bag.note) html += "<p>" + esc(bag.note) + "</p>";
-    if (bag.san) html += '<div class="row"><button type="button" class="btn ghost" data-action="roll-san">Perte de Santé Mentale (' + bag.san + ")</button><strong>" + (state.bagSan == null ? "—" : "−" + state.bagSan) + "</strong></div>";
-    if (bag.firearm) {
-      const opts = bag.firearm === "any" ? DATA.firearms.map(function (f) { return f.name; }) : bag.firearm;
-      html += '<label class="field"><span>Combat à distance</span><select data-action="bag-fire"><option value="">Choisir…</option>' + opts.map(function (n) {
-        return '<option ' + (state.bagFirearm === n ? "selected" : "") + ">" + esc(n) + "</option>";
-      }).join("") + "</select></label>";
-    }
-    if (bag.fighting) {
-      html += '<label class="field"><span>Combat rapproché</span><select data-action="bag-fight"><option value="">Choisir…</option>' + DATA.fighting.map(function (f) {
-        return '<option ' + (state.bagFight === f.name ? "selected" : "") + ">" + esc(f.name) + "</option>";
-      }).join("") + "</select></label>";
-    }
-    (bag.specs || []).forEach(function (skill) {
-      html += '<label class="field"><span>' + esc(skill) + '</span><input data-action="bag-spec" data-skill="' + esc(skill) + '" data-bind="bag-' + esc(skill) + '" value="' + esc(state.bagSpec[skill] || "") + '"></label>';
-    });
-    if (bag.social) {
-      for (let i = 0; i < bag.social; i++) {
-        html += '<select data-action="bag-social" data-i="' + i + '"><option value="">Compétence sociale…</option>' + DATA.social.map(function (n) {
-          return '<option ' + (state.bagSocial[i] === n ? "selected" : "") + ">" + n + "</option>";
-        }).join("") + "</select>";
-      }
-    }
-    if (bag.sciences) {
-      for (let i = 0; i < bag.sciences; i++) {
-        html += '<select data-action="bag-sci" data-i="' + i + '"><option value="">Science…</option>' + DATA.sciences.map(function (n) {
-          return '<option ' + (state.bagSci[i] === n ? "selected" : "") + ">" + esc(n) + "</option>";
-        }).join("") + "</select>";
-      }
-    }
-    if (state.bagage === "myth") {
-      html += '<div class="row"><button type="button" class="btn ghost" data-action="roll-myth">Mythe (1D10+5)</button><input data-bind="mythos" data-kind="myth" type="number" min="0" value="' + (state.mythos == null ? "" : state.mythos) + '"><label><input type="checkbox" data-action="believer" ' + (state.believer ? "checked" : "") + "> Croyant</label></div>";
-    }
-    return html + "</div>";
   }
 
   function issueList(list) {
@@ -1690,10 +1609,13 @@
     next.weaponsTouched = !!raw.weaponsTouched;
     if (next.wizard !== WIZARD_LAYOUT && typeof next.step === "number") {
       if (next.wizard === WIZARD_LAYOUT_PREV) {
+        if (next.step >= 6) next.step -= 1;
+      } else if (next.wizard === WIZARD_LAYOUT_TEST) {
         if (next.step >= 9) next.step -= 4;
         else if (next.step >= 5 && next.step <= 8) next.step = STEP_INTEREST;
+        if (next.step >= 6) next.step -= 1;
       } else if (!next.wizard || next.wizard === "legacy") {
-        if (next.step === 4) next.step = 6;
+        if (next.step === 4) next.step = LAST_STEP - 1;
         else if (next.step >= 5) next.step = LAST_STEP;
       }
     }
